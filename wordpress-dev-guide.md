@@ -139,87 +139,69 @@ Include $BREW_PREFIX/etc/httpd/extra/httpd-userdir.conf
 Include $BREW_PREFIX/etc/httpd/vhosts/httpd-vhosts.conf
 ```
 
-Note: We removed the `Indexes` option from `Options` for security reasons, to prevent directory listings.
+Now, we need to configure the user directory and virtual hosts modules.
 
-Save and close the file (Ctrl+O, Enter, Ctrl+X).
-
-Now, we also need to configure the user directory module:
-
-```bash
-# Create the extra directory if it doesn't exist
-mkdir -p $BREW_PREFIX/etc/httpd/extra
-
-# Create and edit the userdir.conf file
-nano $BREW_PREFIX/etc/httpd/extra/httpd-userdir.conf
-```
-
-Add or update the file with:
-```
-# User directories configuration
-<IfModule mod_userdir.c>
-    UserDir Sites
-    UserDir disabled root
-    
-    <Directory "/Users/*/Sites">
-        AllowOverride All
-        Options Indexes MultiViews FollowSymLinks
-        Require all granted
-        
-        <FilesMatch \.php$>
-            SetHandler application/x-httpd-php
-        </FilesMatch>
-    </Directory>
-    
-    # Also allow access to all subdirectories
-    <Directory "/Users/*/Sites/*">
-        AllowOverride All
-        Options Indexes MultiViews FollowSymLinks
-        Require all granted
-        
-        <FilesMatch \.php$>
-            SetHandler application/x-httpd-php
-        </FilesMatch>
-    </Directory>
-</IfModule>
-```
-
-Save and close the file.
-
-### Step 4: Create Virtual Hosts Directory
-
-```bash
-# Get Homebrew prefix
-BREW_PREFIX=$(brew --prefix)
-
-# Create a directory for virtual hosts configuration
-mkdir -p $BREW_PREFIX/etc/httpd/vhosts
-```
-
-### Step 5: Set Up Virtual Host for WordPress
-
-Based on your existing configuration:
-
-```bash
-# Get Homebrew prefix
-BREW_PREFIX=$(brew --prefix)
-
-# Create and edit the virtual host configuration file
-nano $BREW_PREFIX/etc/httpd/vhosts/zsell.ai.conf  # Or the name of your vhost config file
-```
-
-Your current virtual host configuration looks like this:
+### Step 4: Configure User Directory
 
 ```
+# Settings for user home directories
+#
+# Required module: mod_authz_core, mod_authz_host, mod_userdir
+
+#
+# UserDir: The name of the directory that is appended onto a user's home
+# directory if a ~user request is received.  Note that you must also set
+# the default access control for these directories, as in the example below.
+#
+#UserDir public_html
+UserDir Sites
+
+#
+# On Mac OS and for WordPress sites we need more permissions than read-only.
+#
+<Directory "/Users/*/Sites">
+    AllowOverride All
+    Options Indexes MultiViews FollowSymLinks
+    Require all granted
+</Directory>
+```
+
+### Step 5: Configure Virtual Hosts
+
+```
+# Virtual Hosts
+#
+# Required modules: mod_log_config
+
+# If you want to maintain multiple domains/hostnames on your
+# machine you can setup VirtualHost containers for them. Most configurations
+# use only name-based virtual hosts so the server doesn't need to worry about
+# IP addresses. This is indicated by the asterisks in the directives below.
+#
+# Please see the documentation at 
+# <URL:http://httpd.apache.org/docs/2.4/vhosts/>
+# for further details before you try to setup virtual hosts.
+#
+# You may use the command line option '-S' to verify your virtual host
+# configuration.
+
+#
+# VirtualHost example:
+# Almost any Apache directive may go into a VirtualHost container.
+# The first VirtualHost section is used for all requests that do not
+# match a ServerName or ServerAlias in any <VirtualHost> block.
+#
+
 <VirtualHost *:8080>
     ServerAdmin webmaster@zsell.ai
     ServerName zsell.ai.local
-    DocumentRoot "/Users/wernerheigl/Sites/zsell.ai"
+    DocumentRoot "/Users/wernerheigl/Sites/zsell-ai-wordpress"
     ErrorLog "/opt/homebrew/var/log/httpd/zsell_ai-error_log"
     CustomLog "/opt/homebrew/var/log/httpd/zsell_ai-access_log" common
 </VirtualHost>
 ```
 
-This configuration points to `/Users/wernerheigl/Sites/zsell.ai` as your WordPress installation directory. Make sure that this directory exists and contains your WordPress files.
+This configuration points to `/Users/wernerheigl/Sites/zsell-ai-wordpress` as your WordPress installation directory. Make sure that this directory exists and contains your WordPress files.
 
 If you need to add additional configuration options to your virtual host, you can include directory-specific settings:
 
@@ -227,19 +209,17 @@ If you need to add additional configuration options to your virtual host, you ca
 <VirtualHost *:8080>
     ServerAdmin webmaster@zsell.ai
     ServerName zsell.ai.local
-    DocumentRoot "/Users/wernerheigl/Sites/zsell.ai"
+    DocumentRoot "/Users/wernerheigl/Sites/zsell-ai-wordpress"
     ErrorLog "/opt/homebrew/var/log/httpd/zsell_ai-error_log"
     CustomLog "/opt/homebrew/var/log/httpd/zsell_ai-access_log" common
     
-    <Directory "/Users/wernerheigl/Sites/zsell.ai">
+    <Directory "/Users/wernerheigl/Sites/zsell-ai-wordpress">
         Options Indexes FollowSymLinks MultiViews
         AllowOverride All
         Require all granted
     </Directory>
 </VirtualHost>
 ```
-
-Save and close the file if you make any changes.
 
 ### Step 6: Configure Hosts File for Local Domain
 
@@ -271,21 +251,7 @@ BREW_PREFIX=$(brew --prefix)
 mkdir -p $BREW_PREFIX/var/log/httpd
 ```
 
-### Step 7: Update Hosts File
-
-```bash
-# Edit the hosts file
-sudo nano /etc/hosts
-```
-
-Add this line to the file:
-```
-127.0.0.1 wordpress.local
-```
-
-Save and close the file.
-
-### Step 8: Create WordPress Directory
+### Step 7: Create WordPress Directory
 
 We'll be using the ~/Sites directory for our WordPress installations:
 
@@ -294,7 +260,7 @@ We'll be using the ~/Sites directory for our WordPress installations:
 mkdir -p ~/Sites
 
 # Create the WordPress directory within Sites
-mkdir -p ~/Sites/wordpress
+mkdir -p ~/Sites/zsell-ai-wordpress
 
 # Set proper permissions for all subdirectories
 find ~/Sites -type d -exec chmod 755 {} \;
@@ -308,10 +274,10 @@ chmod o+x ~
 
 # Make sure all directories in the path have the proper permissions
 chmod 755 ~/Sites
-chmod -R 755 ~/Sites/wordpress
+chmod -R 755 ~/Sites/zsell-ai-wordpress
 ```
 
-### Step 9: Restart Apache
+### Step 8: Restart Apache
 
 ```bash
 # Get Homebrew prefix
@@ -388,7 +354,7 @@ php -d memory_limit=512M $(which wp) core download
 wp config create --dbname=wordpress --dbuser=wordpressuser --dbpass=your_strong_password --dbhost=localhost
 
 # Install WordPress
-wp core install --url=zsell.ai.local:8080 --title="ZSell Development" --admin_user=admin --admin_password=your_admin_password --admin_email=your@email.com
+wp core install --url=zsell.ai.local:8080 --title="ZSell" --admin_user=admin --admin_password=your_admin_password --admin_email=your@email.com
 ```
 
 Replace `your_strong_password`, `your_admin_password`, and `your@email.com` with your own values. Also, make sure to use the correct database name that you've created.
