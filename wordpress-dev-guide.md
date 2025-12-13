@@ -83,9 +83,9 @@ mysql -u root -p
 Once logged in, create the database and user:
 
 ```sql
-CREATE DATABASE wordpress;
-CREATE USER 'wordpress'@'localhost' IDENTIFIED BY 'your_strong_password';
-GRANT ALL PRIVILEGES ON wordpress.* TO 'wordpress'@'localhost';
+CREATE DATABASE databasename;
+CREATE USER "wordpressusername"@"localhost" IDENTIFIED BY "your_strong_password";
+GRANT ALL PRIVILEGES ON databasename.* TO "wordpressusername"@"localhost";
 FLUSH PRIVILEGES;
 EXIT;
 ```
