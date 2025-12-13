@@ -130,37 +130,13 @@ DocumentRoot "$BREW_PREFIX/var/www"
 </Directory>
 ```
 
-Add this at the end of the file:
+At the end of the file enable user directories and virtual hosts:
 ```
-# Include virtual hosts
-Include $BREW_PREFIX/etc/httpd/vhosts/*.conf
+# User home directories
+Include $BREW_PREFIX/etc/httpd/extra/httpd-userdir.conf
 
-# Enable User Directories
-<IfModule mod_userdir.c>
-    UserDir Sites
-    UserDir disabled root
-    
-    <Directory "/Users/*/Sites">
-        AllowOverride All
-        Options MultiViews FollowSymLinks
-        Require all granted
-        
-        <FilesMatch \.php$>
-            SetHandler application/x-httpd-php
-        </FilesMatch>
-    </Directory>
-    
-    # Also allow access to all subdirectories
-    <Directory "/Users/*/Sites/*">
-        AllowOverride All
-        Options MultiViews FollowSymLinks
-        Require all granted
-        
-        <FilesMatch \.php$>
-            SetHandler application/x-httpd-php
-        </FilesMatch>
-    </Directory>
-</IfModule>
+# Include virtual hosts
+Include $BREW_PREFIX/etc/httpd/vhosts/httpd-vhosts.conf
 ```
 
 Note: We removed the `Indexes` option from `Options` for security reasons, to prevent directory listings.
