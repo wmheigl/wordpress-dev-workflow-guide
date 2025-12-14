@@ -364,7 +364,11 @@ wp core download
 
 # If you still have memory issues, run WP-CLI with increased memory directly
 php -d memory_limit=512M $(which wp) core download
+```
 
+At this point you have two options to install WordPress: (1) open `readme.thml` and follow instructions, or (2) use WP-CLI. The following only provides guidance for the latter as the former option is self-explanatory.
+
+```
 # Create WordPress configuration file
 wp config create --dbname=wordpress --dbuser=wordpressuser --dbpass=your_strong_password --dbhost=localhost
 
