@@ -9,7 +9,7 @@ This guide will walk you through setting up a professional WordPress development
 3. **Set up Git version control** to track your changes
 4. **Configure virtual hosts** to use custom domain names locally
 5. **Enable port forwarding** to access your site without specifying a port
-6. **Install Elementor Pro** for site building
+6. **Configure WordPress 6.9 with TwentyTwentyFive theme** using the native Block Editor and Site Editor
 7. **Create staging and production environments** for testing and deployment
 8. **Establish a workflow** for moving changes between environments
 
@@ -24,7 +24,7 @@ The process is designed to be modular - you can start with the local setup and a
 5. [Staging Environment Configuration](#staging-environment-configuration)
 6. [Production Environment Setup](#production-environment-setup)
 7. [Database Synchronization](#database-synchronization)
-8. [Installing Elementor Pro](#installing-elementor-pro)
+8. [Site Editor and Theme Configuration](#site-editor-and-theme-configuration)
 9. [Development and Deployment Workflow](#development-and-deployment-workflow)
 10. [Collaboration Guide](#collaboration-guide)
 11. [Troubleshooting](#troubleshooting)
@@ -107,8 +107,19 @@ nano $BREW_PREFIX/etc/httpd/httpd.conf
 Find and uncomment (remove the # at the beginning) these lines:
 ```
 LoadModule rewrite_module lib/httpd/modules/mod_rewrite.so
-LoadModule php_module lib/httpd/modules/mod_php.so
 LoadModule userdir_module lib/httpd/modules/mod_userdir.so
+```
+
+PHP support needs to be enabled manually. Add this at the end of the DSO Support section:
+```
+# Manually added PHP support
+LoadModule php_module /opt/homebrew/opt/php/lib/httpd/modules/libphp.so
+
+<IfModule php_module>
+    <FilesMatch \.php$>
+         SetHandler application/x-httpd-php
+    </FilesMatch>
+</IfModule>
 ```
 
 Find the line that sets the listening port (Note: we're using port 8080 to avoid permission issues with privileged ports):
@@ -129,6 +140,7 @@ DocumentRoot "$BREW_PREFIX/var/www"
     Require all granted
 </Directory>
 ```
+Strictly speaking this is not necessary since we're using user directory support. All websites are in `~/Sites`, which also avoids having to use superuser privileges.
 
 At the end of the file enable user directories and virtual hosts:
 ```
@@ -286,6 +298,9 @@ BREW_PREFIX=$(brew --prefix)
 # Check Apache configuration
 $BREW_PREFIX/bin/httpd -t
 
+# Check Apache virtual hosts configuration
+$BREW_PREFIX/bin/httpd -S
+
 # Restart Apache to apply changes
 brew services restart httpd
 ```
@@ -382,49 +397,41 @@ cd ~/Sites/your_project_name
 git init
 ```
 
-## Optimized Git Strategy for Elementor Enterprise Site
+## Git Strategy for WordPress Block Editor Site
 
-For an enterprise site focused primarily on content management with Elementor, here's a streamlined approach to what should be tracked in Git:
+For a site using WordPress 6.9's native Block Editor and Site Editor with the TwentyTwentyFive theme, the Git strategy is straightforward. Since Site Editor customizations (global styles, template modifications, navigation menus) are stored in the database rather than in theme files, version control focuses primarily on:
+
+1. **Custom plugins** you develop
+2. **Configuration files** (excluding sensitive data)
+3. **Any custom functionality plugins**
 
 ### What to Track in Version Control
 
-1. **Hello Elementor Theme and Customizations**:
+1. **Custom Functionality Plugins**:
    ```
-   /wp-content/themes/hello-elementor/
-   /wp-content/themes/hello-elementor-child/  # If using a child theme
+   /wp-content/plugins/zsell-custom-functionality/
    ```
-   Track the Hello Elementor theme and any child theme you create for customizations.
+   Track any custom plugins you create for site-specific functionality.
 
-2. **Critical Plugins**:
+2. **Must-Use Plugins** (if any):
    ```
-   /wp-content/plugins/elementor/
-   /wp-content/plugins/elementor-pro/
-   ```
-   Since Elementor and Elementor Pro are core to your site functionality, track these in Git.
-
-3. **Custom Templates and Layout Files**:
-   ```
-   /wp-content/uploads/elementor/
-   ```
-   These would normally be excluded, but for an Elementor-focused site, tracking these can ensure consistency across environments.
-   
-4. **Custom CSS/JS**: Any custom code files you create:
-   ```
-   /wp-content/themes/hello-elementor-child/assets/
+   /wp-content/mu-plugins/
    ```
 
-5. **Other Essential Plugins**: Any other plugins that are critical to your site functionality.
+3. **Custom CSS/JS Files** (if stored outside the database):
+   ```
+   /wp-content/themes/twentytwentyfive-child/assets/  # If using a child theme
+   ```
 
 ### What to Exclude from Version Control
 
-1. **WordPress Core Files**: Standard WordPress files.
+1. **WordPress Core Files**: Standard WordPress files that can be reinstalled.
 
-2. **User Uploads** (except Elementor templates):
+2. **User Uploads**:
    ```
-   /wp-content/uploads/*
-   !/wp-content/uploads/elementor/
+   /wp-content/uploads/
    ```
-   Exclude media uploads but keep Elementor templates.
+   Media files should be synced separately, not through Git.
 
 3. **Sensitive Configuration**:
    ```
@@ -432,21 +439,33 @@ For an enterprise site focused primarily on content management with Elementor, h
    .htaccess
    ```
 
-4. **Development Files and Caches**:
+4. **Themes** (including TwentyTwentyFive):
+   ```
+   /wp-content/themes/
+   ```
+   Stock themes can be reinstalled. Site Editor customizations are in the database.
+
+5. **Standard Plugins**:
+   ```
+   /wp-content/plugins/
+   ```
+   Plugins from the WordPress repository can be reinstalled via WP-CLI.
+
+6. **Development Files and Caches**:
    ```
    node_modules/
    .DS_Store
    wp-content/cache/
    ```
 
-### Recommended `.gitignore` for Elementor Enterprise Site
+### Recommended `.gitignore` for Block Editor Site
 
 ```gitignore
 # WordPress Core
 wp-admin/
 wp-includes/
 wp-content/index.php
-wp-content/languages
+wp-content/languages/
 wp-content/plugins/index.php
 wp-content/themes/index.php
 index.php
@@ -461,10 +480,8 @@ wp-config.php
 .env
 .htaccess
 
-# User uploads (except Elementor templates)
-wp-content/uploads/*
-!wp-content/uploads/elementor/
-!wp-content/uploads/template-kits/
+# User uploads
+wp-content/uploads/
 
 # Cache and temporary files
 wp-content/cache/
@@ -475,11 +492,13 @@ wp-content/blogs.dir/
 wp-content/wp-cache-config.php
 *.log
 
-# Default WordPress themes
-wp-content/themes/twenty*/
+# All themes (Site Editor changes are stored in database)
+wp-content/themes/
 
-# Specific plugins to exclude (unused plugins)
-wp-content/plugins/hello.php
+# All plugins except custom ones
+wp-content/plugins/*
+!wp-content/plugins/zsell-custom-functionality/
+# Add other custom plugins as needed
 
 # OS and editor files
 .DS_Store
@@ -497,205 +516,100 @@ Thumbs.db
 # Database exports
 *.sql
 *.gz
-
-# Whitelist the essential plugins and themes
-# Note: We're tracking specific plugins rather than excluding them
-# This is the opposite of the typical WordPress approach, but makes sense
-# for an Elementor-based site with minimal plugins
-wp-content/plugins/*
-!wp-content/plugins/elementor/
-!wp-content/plugins/elementor-pro/
-# Add other essential plugins as needed
-# !wp-content/plugins/wordpress-seo/
-
-# Whitelist the Hello Elementor theme
-wp-content/themes/*
-!wp-content/themes/hello-elementor/
-!wp-content/themes/hello-elementor-child/
 ```
 
-## Marketing-Led Content Workflow with Elementor
+### Key Principle: Database is Primary
 
-For an enterprise site where marketing team members create landing pages directly in Elementor on the staging environment, here's a specialized workflow that ensures changes propagate back to GitHub:
+With WordPress 6.9 and the Site Editor, your design customizations live in the database:
+- **Global Styles** (colors, typography, spacing)
+- **Template modifications**
+- **Template parts** (headers, footers)
+- **Navigation menus**
+- **Block patterns** (when customized)
 
-### Updated Workflow for Marketing-Created Content
+This means **database synchronization is more critical than Git** for design continuity across environments. See the [Database Synchronization](#database-synchronization) section for scripts to manage this.
 
-#### 1. Infrastructure Setup
+## Content Workflow with Block Editor
 
-1. **Staging Server Configuration**:
-   ```bash
-   # On the staging server, ensure Git is properly set up
-   cd /path/to/wordpress
-   git config user.name "Staging Server"
-   git config user.email "webmaster@yourdomain.com"
-   
-   # Create a deployment key for GitHub
-   ssh-keygen -t ed25519 -C "staging@yourdomain.com"
-   
-   # Add the public key to GitHub as a deploy key with write access
-   cat ~/.ssh/id_ed25519.pub
-   ```
+For a site where team members create content using the Block Editor on the staging environment, the workflow centers on database synchronization rather than file tracking.
 
-2. **Automation Script Setup**:
-   Create a script on staging to commit and push Elementor changes:
-   
-   ```bash
-   # /path/to/wordpress/commit-elementor-changes.sh
-   #!/bin/bash
-   
-   cd /path/to/wordpress
-   
-   # Track any new Elementor template files
-   git add wp-content/uploads/elementor/
-   
-   # Add Hello theme customizations
-   git add wp-content/themes/hello-elementor/
-   git add wp-content/themes/hello-elementor-child/
-   
-   # Add plugin files that might have changed
-   git add wp-content/plugins/elementor/
-   git add wp-content/plugins/elementor-pro/
-   
-   # See what's changed
-   CHANGES=$(git status --porcelain)
-   
-   if [ -n "$CHANGES" ]; then
-     # Commit with timestamp and info
-     git commit -m "Elementor content update from staging - $(date)"
-     
-     # Push to GitHub
-     git push origin main
-     
-     echo "Changes pushed to GitHub."
-   else
-     echo "No changes detected."
-   fi
-   ```
-   
-   Make the script executable:
-   ```bash
-   chmod +x /path/to/wordpress/commit-elementor-changes.sh
-   ```
+### Content Creation Workflow
 
-#### 2. Marketing Team Workflow
+#### 1. Content Creation on Staging
 
-1. **Content Creation Process**:
-   - Marketing team builds landing pages on staging using Elementor
-   - Management reviews content on staging
+1. **Content creators work directly on staging**:
+   - Create pages and posts using the Block Editor
+   - Use TwentyTwentyFive's built-in block patterns for consistent layouts
+   - Customize global styles via Appearance > Editor > Styles
 
-2. **Capturing Changes** (after approval):
-   ```bash
-   # Marketing or admin runs the commit script after making approved changes
-   ./commit-elementor-changes.sh
-   ```
-   
-   Alternatively, set up a button in the WordPress admin for non-technical users:
-   ```php
-   // Add this to a custom functionality plugin
-   add_action('admin_bar_menu', function($admin_bar) {
-     if (current_user_can('administrator')) {
-       $admin_bar->add_menu([
-         'id'    => 'commit-changes',
-         'title' => 'Save Changes to GitHub',
-         'href'  => admin_url('admin-ajax.php?action=commit_elementor_changes'),
-       ]);
-     }
-   }, 100);
-   
-   add_action('wp_ajax_commit_elementor_changes', function() {
-     $output = shell_exec('/path/to/wordpress/commit-elementor-changes.sh 2>&1');
-     wp_redirect(add_query_arg('commit-result', urlencode($output), wp_get_referer()));
-     exit;
-   });
-   ```
+2. **Design changes via Site Editor**:
+   - Modify templates and template parts
+   - Adjust global color palette and typography
+   - All changes automatically saved to database
+
+#### 2. Review and Approval
+
+1. Management reviews content on staging
+2. Once approved, content is ready for production deployment
 
 #### 3. Production Deployment
 
-1. **Pull Changes to Production**:
-   ```bash
-   # SSH to production server
-   ssh user@production-server
-   
-   # Navigate to WordPress directory
-   cd /path/to/wordpress
-   
-   # Pull the changes from GitHub
-   git pull origin main
-   ```
+Since all content and design changes are in the database:
 
-2. **Automated Deployment** (optional):
-   Set up webhooks on GitHub to automatically deploy to production when changes are pushed from staging:
-   
-   ```bash
-   # On production server, create a deployment script
-   # /path/to/deploy.sh
-   #!/bin/bash
-   cd /path/to/wordpress
-   git pull origin main
-   ```
-   
-   Then set up a webhook endpoint on your production server that calls this script.
+```bash
+# Export staging database
+ssh username@your_domain.com "cd /path/to/staging/public_html && wp db export staging-db-export.sql"
 
-### Content Synchronization Considerations
+# Create production backup first
+ssh username@your_domain.com "cd /path/to/production/public_html && wp db export production-backup-$(date +%Y%m%d).sql"
 
-Since marketing will be creating content on staging, you need a strategy for handling database content:
+# Transfer and import to production
+ssh username@your_domain.com "cp /path/to/staging/public_html/staging-db-export.sql /path/to/production/public_html/"
+ssh username@your_domain.com "cd /path/to/production/public_html && wp db import staging-db-export.sql"
 
-1. **Template-Based Approach** (Recommended):
-   - Encourage marketing to save reusable sections as Elementor templates
-   - These templates will be committed to Git and can be used across environments
+# Update URLs
+ssh username@your_domain.com "cd /path/to/production/public_html && wp search-replace 'staging.your_domain.com' 'your_domain.com' --all-tables"
 
-2. **Content Migration from Staging to Production**:
-   ```bash
-   # On staging, export specific content
-   wp export --post_type=page --post__in=123,456 --filename=landing-pages.xml
-   
-   # Transfer the file to production
-   scp landing-pages.xml user@production-server:/tmp/
-   
-   # On production, import the content
-   wp import /tmp/landing-pages.xml --authors=create
-   ```
+# Cleanup
+ssh username@your_domain.com "rm /path/to/staging/public_html/staging-db-export.sql /path/to/production/public_html/staging-db-export.sql"
+```
 
-3. **Database Synchronization Plugin**:
-   - Consider using WP Migrate DB Pro or similar for selective content migration
-   - Set up "push" profiles to send specific content from staging to production
+### Selective Content Migration
 
-### Scheduling and Automation
+For migrating specific pages rather than the entire database:
 
-For a marketing-friendly workflow, consider these automation options:
+```bash
+# On staging, export specific content
+wp export --post_type=page --post__in=123,456 --filename=landing-pages.xml
 
-1. **Scheduled Commits**:
-   ```bash
-   # Add to crontab on staging
-   0 */6 * * * /path/to/wordpress/commit-elementor-changes.sh >> /var/log/elementor-commits.log 2>&1
-   ```
-   This will automatically commit changes every 6 hours.
+# Transfer the file to production
+scp landing-pages.xml user@production-server:/tmp/
 
-2. **Admin UI Integration**:
-   Add status indicators in WordPress admin:
-   ```php
-   add_action('admin_notices', function() {
-     $last_commit = shell_exec('git log -1 --pretty=format:"%ar"');
-     echo '<div class="notice notice-info"><p>Last changes committed to GitHub: ' . $last_commit . '</p></div>';
-   });
-   ```
+# On production, import the content
+wp import /tmp/landing-pages.xml --authors=create
+```
 
-3. **Deployment Notifications**:
-   Set up Slack notifications when changes are deployed to production.
+### Design System Consistency
 
-### Training and Documentation
+The Site Editor's global styles ensure design consistency:
 
-Create documentation for marketing team members:
+1. **Colors**: Define your brand palette once in Styles > Colors
+2. **Typography**: Set font families and sizes in Styles > Typography
+3. **Spacing**: Configure default spacing in Styles > Layout
 
-1. **Elementor Best Practices**:
-   - How to create reusable templates
-   - When to use global styles vs. page-specific styles
-   - Always save work as templates before major changes
+These settings propagate to all blocks automatically, ensuring the ZSell design system is applied consistently.
+
+### Training Guidelines for Content Creators
+
+1. **Block Editor Best Practices**:
+   - Use the built-in TwentyTwentyFive patterns for consistent layouts
+   - Apply global styles rather than inline styling
+   - Use reusable blocks for repeated content elements
 
 2. **Workflow Guidelines**:
-   - When to use the "Save to GitHub" button
-   - How to request deployment to production
-   - Testing guidelines before requesting deployment
+   - Always work on staging first
+   - Request review before production deployment
+   - Test responsive behavior using the Block Editor's preview modes
 
 ### Step 3: Add wp-config-sample.php to Repository
 
@@ -911,6 +825,8 @@ git remote add production ssh://username@your_domain.com/~/git-repos/production.
 
 ## Database Synchronization
 
+Database synchronization is critical for WordPress Block Editor sites since all Site Editor customizations, content, and design settings are stored in the database.
+
 ### Step 1: Install WP-CLI on Staging and Production
 
 If not already installed, add WP-CLI to your staging and production environments:
@@ -954,7 +870,7 @@ echo "Importing database on staging..."
 ssh username@your_domain.com "cd /path/to/staging/public_html && wp db import wordpress-db-export.sql && rm wordpress-db-export.sql"
 
 echo "Updating URLs in staging database..."
-ssh username@your_domain.com "cd /path/to/staging/public_html && wp search-replace 'wordpress.local' 'staging.your_domain.com' --all-tables"
+ssh username@your_domain.com "cd /path/to/staging/public_html && wp search-replace 'zsell.ai.local' 'staging.your_domain.com' --all-tables"
 
 echo "Cleaning up..."
 rm wordpress-db-export.sql
@@ -976,7 +892,7 @@ Add the following content:
 ```bash
 #!/bin/bash
 echo "Creating backup of production database..."
-ssh username@your_domain.com "cd /path/to/production/public_html && wp db export production-backup.sql"
+ssh username@your_domain.com "cd /path/to/production/public_html && wp db export production-backup-$(date +%Y%m%d).sql"
 
 echo "Exporting staging database..."
 ssh username@your_domain.com "cd /path/to/staging/public_html && wp db export staging-db-export.sql"
@@ -1019,7 +935,7 @@ echo "Importing production database locally..."
 wp db import production-db-export.sql
 
 echo "Updating URLs in local database..."
-wp search-replace 'your_domain.com' 'wordpress.local' --all-tables
+wp search-replace 'your_domain.com' 'zsell.ai.local' --all-tables
 
 echo "Cleaning up..."
 rm production-db-export.sql
@@ -1034,49 +950,75 @@ Make all scripts executable:
 chmod +x db-push-to-staging.sh db-push-to-production.sh db-pull-from-production.sh
 ```
 
-## Installing Elementor Pro
+## Site Editor and Theme Configuration
 
-### Step 1: Install Elementor Free Plugin
+WordPress 6.9 with the TwentyTwentyFive theme provides a complete site-building experience through the native Block Editor and Site Editor. No additional page builder plugins are required.
 
-```bash
-# Navigate to your WordPress directory
-cd ~/Sites/your_project_name
-
-# Install and activate Elementor free plugin
-wp plugin install elementor --activate
-```
-
-### Step 2: Install Elementor Pro Plugin
-
-You can install Elementor Pro using WP-CLI, which is more reliable and bypasses any PHP upload size limitations:
+### Step 1: Activate TwentyTwentyFive Theme
 
 ```bash
 # Navigate to your WordPress directory
 cd ~/Sites/your_project_name
 
-# Option 1: Install directly from the ZIP file you downloaded
-wp plugin install /path/to/downloaded/elementor-pro.zip --activate
+# Ensure TwentyTwentyFive is installed (comes bundled with WordPress 6.9)
+wp theme install twentytwentyfive --activate
 
-# Option 2: If the above doesn't work, extract and install manually
-unzip /path/to/downloaded/elementor-pro.zip -d ~/Sites/your_project_name/wp-content/plugins/
-wp plugin activate elementor-pro
+# Verify activation
+wp theme status twentytwentyfive
 ```
 
-After installation, activate your Elementor Pro license:
-- Go to WordPress Admin Dashboard
-- Navigate to Elementor > License
-- Enter your license key and activate
+### Step 2: Access the Site Editor
 
-If you're experiencing issues with the WordPress admin interface upload limits despite changing php.ini settings, using WP-CLI is the most reliable method for installing premium plugins.
+The Site Editor is accessed via:
+- **WordPress Admin** > **Appearance** > **Editor**
 
-### Step 3: Add Elementor Pro to Version Control
-
-```bash
-# Add Elementor Pro to Git
-git add wp-content/plugins/elementor-pro
-git commit -m "Add Elementor Pro plugin"
-git push origin main
+Or directly at:
 ```
+http://zsell.ai.local:8080/wp-admin/site-editor.php
+```
+
+### Step 3: Configure Global Styles
+
+In the Site Editor, configure your brand's design system:
+
+1. **Open Styles Panel**: Click the Styles icon (half-filled circle) in the top-right
+2. **Colors**: Set your brand palette
+   - Navigate to Styles > Colors
+   - Define primary, secondary, and accent colors matching ZSell brand guidelines
+3. **Typography**: Configure fonts
+   - Navigate to Styles > Typography
+   - Set heading and body font families, sizes, and weights
+4. **Layout**: Set spacing defaults
+   - Navigate to Styles > Layout
+   - Configure content width and padding
+
+### Step 4: Customize Templates
+
+TwentyTwentyFive includes a variety of templates you can customize:
+
+1. **Templates**: Modify page layouts
+   - Home, Single Post, Page, Archive, 404, etc.
+2. **Template Parts**: Edit reusable sections
+   - Header, Footer, Sidebar
+
+Access via Site Editor > Templates or Template Parts.
+
+### Step 5: Use Block Patterns
+
+TwentyTwentyFive provides numerous block patterns for common layouts:
+
+1. In the Block Editor, click the **+** button to add a block
+2. Select the **Patterns** tab
+3. Browse categories: Hero, Features, Testimonials, CTAs, etc.
+4. Insert and customize as needed
+
+### Key Benefits of Native Block Editor
+
+1. **No Plugin Dependencies**: Everything is built into WordPress core
+2. **Performance**: No additional JavaScript frameworks to load
+3. **Future-Proof**: Follows WordPress's development roadmap
+4. **Database-Stored Customizations**: Theme updates won't overwrite your changes
+5. **Pattern Library**: Extensive pre-built layouts in TwentyTwentyFive
 
 ## Development and Deployment Workflow
 
@@ -1097,10 +1039,13 @@ git checkout -b feature/new-feature-name
 
 #### Step 2: Making Changes
 
-1. Make your changes using WordPress admin and Elementor Pro
-2. Test your changes locally at http://wordpress.local
+1. Make your changes using WordPress admin and the Block Editor
+2. Use the Site Editor for template and global style modifications
+3. Test your changes locally at http://zsell.ai.local:8080
 
 #### Step 3: Committing Changes
+
+For code changes (custom plugins, configuration):
 
 ```bash
 # Add your changes to Git
@@ -1112,6 +1057,8 @@ git commit -m "Description of your changes"
 # Push your feature branch to the remote repository
 git push origin feature/new-feature-name
 ```
+
+**Note**: Site Editor changes (templates, global styles) are stored in the database. Commit any related documentation or configuration files, but the actual design changes will be migrated via database sync.
 
 #### Step 4: Code Review (if collaborating with others)
 
@@ -1128,18 +1075,20 @@ git checkout main
 # Pull latest changes if using GitHub and pull requests
 git pull origin main
 
-# Push to staging
+# Push code to staging
 git push staging main
 
-# Update staging database (if necessary)
+# Sync database to staging (includes Site Editor changes)
 ./db-push-to-staging.sh
 ```
 
 #### Step 6: Testing on Staging
 
 1. Test thoroughly on https://staging.your_domain.com
-2. Make any necessary adjustments
-3. Commit and push any fixes
+2. Verify Site Editor customizations rendered correctly
+3. Check responsive behavior
+4. Make any necessary adjustments on staging
+5. If staging changes need to come back to local, pull the staging database
 
 #### Step 7: Deploy to Production
 
@@ -1147,9 +1096,17 @@ git push staging main
 # After thorough testing on staging
 git push production main
 
-# Update production database (if necessary)
+# Sync database to production
 ./db-push-to-production.sh
 ```
+
+### Important: Database is the Source of Truth
+
+With the Block Editor approach:
+- **Git** tracks code (custom plugins, scripts, configuration)
+- **Database** contains design (Site Editor changes, content, menus)
+
+Always sync the database when deploying design or content changes.
 
 ## Collaboration Guide
 
@@ -1165,6 +1122,11 @@ git push production main
    - Follow the steps in Local Development Environment Setup
    - Create a wp-config.php file based on wp-config-sample.php
    - Create and configure local database
+   - Install WordPress core and TwentyTwentyFive theme:
+     ```bash
+     wp core download
+     wp theme activate twentytwentyfive
+     ```
    - Import the latest database:
      ```bash
      ./db-pull-from-production.sh
@@ -1200,85 +1162,6 @@ git push production main
 
 ### Common Local Development Issues
 
-#### Manual Installation of Plugins (Alternative Method)
-
-If you're having issues with upload limits or WP-CLI installations:
-
-1. **Extract the plugin manually**:
-   ```bash
-   # Create a temporary directory
-   mkdir -p ~/temp_plugins
-   
-   # Extract the plugin ZIP file
-   unzip /path/to/elementor-pro.zip -d ~/temp_plugins
-   
-   # Copy the plugin directory to WordPress plugins folder
-   cp -R ~/temp_plugins/elementor-pro ~/Sites/your_project_name/wp-content/plugins/
-   
-   # Clean up
-   rm -rf ~/temp_plugins
-   ```
-
-2. **Activate via WP-CLI**:
-   ```bash
-   cd ~/Sites/your_project_name
-   wp plugin activate elementor-pro
-   ```
-
-3. **Verify installation**:
-   ```bash
-   wp plugin list
-   ```
-   
-This method completely bypasses both the WordPress admin interface and the WP-CLI plugin installer, which can be helpful in environments with strict limitations.
-
-If you see an error like "The uploaded file exceeds the upload_max_filesize directive in php.ini" when trying to upload plugins or media:
-
-1. **Locate your PHP configuration file**:
-   ```bash
-   # For Homebrew PHP
-   BREW_PREFIX=$(brew --prefix)
-   PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;")
-   PHP_INI_FILE="$BREW_PREFIX/etc/php/$PHP_VERSION/php.ini"
-   
-   # For Laravel Herd
-   # PHP_INI_FILE="~/.config/herd/config/php/8.x/php.ini"
-   
-   # Edit the file
-   nano $PHP_INI_FILE
-   ```
-
-2. **Increase these values** in your php.ini file:
-   ```
-   ; Find and increase these values
-   upload_max_filesize = 64M
-   post_max_size = 64M
-   max_execution_time = 300
-   memory_limit = 256M
-   ```
-
-3. **Restart PHP**:
-   ```bash
-   # If using Homebrew PHP with Apache
-   brew services restart httpd
-   
-   # If using Laravel Herd
-   # Restart Herd from its interface
-   ```
-
-4. **Verify changes took effect**:
-   ```bash
-   # Create a phpinfo file
-   echo "<?php phpinfo(); ?>" > ~/Sites/your_project_name/info.php
-   
-   # Visit http://your_domain.local/info.php in your browser
-   ```
-   Look for the upload_max_filesize value in the output.
-
-After making these changes, you should be able to upload larger files like the Elementor Pro plugin.
-
-#### Apache Not Starting
-
 #### Apache Not Starting
 
 ```bash
@@ -1310,21 +1193,55 @@ sudo launchctl unload -w /System/Library/LaunchDaemons/org.apache.httpd.plist
 brew services restart httpd
 ```
 
+#### Database Connection Issues
+
+1. Verify database credentials in wp-config.php
+2. Ensure MySQL is running:
+   ```bash
+   brew services list
+   # If MySQL is not running
+   brew services start mysql
+   ```
+3. Test database connection:
+   ```bash
+   mysql -u wordpressuser -p
+   ```
+
 #### WP-CLI Memory Issues
 
 If you encounter "Fatal error: Allowed memory size exhausted" when using WP-CLI:
 
+##### For Laravel Herd:
+```bash
+# Edit Laravel Herd's PHP configuration
+# Find the correct PHP version you're using (e.g., 8.2)
+nano ~/.config/herd/config/php/8.2/php.ini
+# or sometimes
+nano ~/.herd/config/php/8.2/php.ini
+
+# Find the memory_limit line and change it to:
+memory_limit = 512M
+
+# Restart Herd to apply changes
+```
+
+##### For Homebrew PHP:
 ```bash
 # Create a WP-CLI config file with increased memory limit
 mkdir -p ~/.wp-cli
 echo "memory_limit = 512M" > ~/.wp-cli/config.yml
 
-# Alternative: Run commands with increased memory limit
+# Alternative: Run commands with increased memory limit for a single command
 php -d memory_limit=512M $(which wp) core download
 
 # Alternative: Set a global PHP memory limit
 BREW_PREFIX=$(brew --prefix)
 echo "memory_limit = 512M" > $BREW_PREFIX/etc/php/*/conf.d/99-memory-limit.ini
+```
+
+You can verify which PHP configuration file is being used with:
+```bash
+php --ini | grep "Loaded Configuration File"
 ```
 
 #### Permission Issues
@@ -1334,55 +1251,115 @@ If you see "403 Forbidden" errors when accessing subdirectories:
 ```bash
 # Fix WordPress directory permissions
 chmod o+x ~  # Allow others to execute in your home directory
+chmod 755 ~  # Alternative approach if the above doesn't work
 chmod 755 ~/Sites
-chmod -R 755 ~/Sites/your_project_name
+chmod -R 755 ~/Sites/wordpress
 
 # If you're still having issues, check the permissions of each directory in the path
 ls -la ~
 ls -la ~/Sites
-ls -la ~/Sites/your_project_name
+ls -la ~/Sites/wordpress
 ```
 
-#### Directory Listing Issues
+Also check the Apache error log for specific permission issues:
 
-If you see directory listings instead of WordPress pages, or get "Forbidden" errors when accessing directories:
-
-1. Make sure the DirectoryIndex directive includes index.php:
 ```bash
 BREW_PREFIX=$(brew --prefix)
-nano $BREW_PREFIX/etc/httpd/httpd.conf
+cat $BREW_PREFIX/var/log/httpd/error_log
 ```
 
-Find and update:
-```
-DirectoryIndex index.php index.html
-```
+Possible errors and solutions:
 
-2. Create a .htaccess file in your WordPress admin directory if needed:
+1. **"client denied by server configuration"**: Check your Apache configuration to ensure subdirectories are allowed.
+2. **"Permission denied"**: Fix file/directory permissions.
+3. **"failed to open dir: No such file or directory"**: Check if the path exists and is accessible.
+
+You can also add a `.htaccess` file to your Sites directory:
+
 ```bash
-echo "DirectoryIndex index.php" > ~/Sites/your_project_name/wp-admin/.htaccess
+echo "Require all granted" > ~/Sites/.htaccess
+echo "Require all granted" > ~/Sites/wordpress/.htaccess
 ```
 
-#### Port 80 Access Issues
+### Common Deployment Issues
 
-If you cannot access your site on the standard port 80:
+#### Git Push Errors
 
-1. Verify port forwarding is active:
 ```bash
-sudo pfctl -s nat
+# If you get "Permission denied" errors
+# Verify SSH access to your server
+ssh username@your_domain.com
+
+# Test Git connection
+ssh -T username@your_domain.com
 ```
 
-2. Reapply port forwarding if needed:
+#### Hook Script Errors
+
+1. Check if the post-receive hook is executable:
+   ```bash
+   ssh username@your_domain.com "ls -la ~/git-repos/staging.git/hooks/post-receive"
+   ```
+2. Verify the hook script path:
+   ```bash
+   ssh username@your_domain.com "cat ~/git-repos/staging.git/hooks/post-receive"
+   ```
+
+#### URL Issues After Database Sync
+
+If site URLs are incorrect after database sync:
+
 ```bash
-echo "rdr pass inet proto tcp from any to any port 80 -> 127.0.0.1 port 8080" | sudo pfctl -ef -
+# For staging
+ssh username@your_domain.com "cd /path/to/staging/public_html && wp search-replace 'zsell.ai.local' 'staging.your_domain.com' --all-tables"
+
+# For production
+ssh username@your_domain.com "cd /path/to/production/public_html && wp search-replace 'staging.your_domain.com' 'your_domain.com' --all-tables"
 ```
 
-3. Make sure your WordPress site URLs don't include the port number:
-```bash
-cd ~/Sites/your_project_name
-wp option update siteurl 'http://your_domain.local'
-wp option update home 'http://your_domain.local'
-```
+### General WordPress Issues
+
+#### White Screen of Death
+
+1. Enable WordPress debugging:
+   Edit wp-config.php and add:
+   ```php
+   define('WP_DEBUG', true);
+   define('WP_DEBUG_LOG', true);
+   define('WP_DEBUG_DISPLAY', false);
+   ```
+2. Check the debug.log file:
+   ```bash
+   cat wp-content/debug.log
+   ```
+
+#### Plugin or Theme Conflicts
+
+1. Deactivate all plugins:
+   ```bash
+   wp plugin deactivate --all
+   ```
+2. Switch to TwentyTwentyFive if using a different theme:
+   ```bash
+   wp theme activate twentytwentyfive
+   ```
+3. Reactivate plugins one by one to identify conflicts.
+
+#### Site Editor Not Loading
+
+If the Site Editor fails to load:
+
+1. Clear browser cache
+2. Check for JavaScript errors in browser console
+3. Verify WordPress and theme are up to date:
+   ```bash
+   wp core update
+   wp theme update twentytwentyfive
+   ```
+4. Check for conflicting plugins:
+   ```bash
+   wp plugin deactivate --all
+   ```
 
 ### Configuring Apache to Use Standard Port 80
 
@@ -1529,158 +1506,6 @@ cat $BREW_PREFIX/var/log/httpd/error_log
 $BREW_PREFIX/bin/httpd -t
 ```
 
-#### Database Connection Issues
-
-1. Verify database credentials in wp-config.php
-2. Ensure MySQL is running:
-   ```bash
-   brew services list
-   # If MySQL is not running
-   brew services start mysql
-   ```
-3. Test database connection:
-   ```bash
-   mysql -u wordpressuser -p
-   ```
-
-#### WP-CLI Memory Issues
-
-If you encounter "Fatal error: Allowed memory size exhausted" when using WP-CLI:
-
-##### For Laravel Herd:
-```bash
-# Edit Laravel Herd's PHP configuration
-# Find the correct PHP version you're using (e.g., 8.2)
-nano ~/.config/herd/config/php/8.2/php.ini
-# or sometimes
-nano ~/.herd/config/php/8.2/php.ini
-
-# Find the memory_limit line and change it to:
-memory_limit = 512M
-
-# Restart Herd to apply changes
-```
-
-##### For Homebrew PHP:
-```bash
-# Create a WP-CLI config file with increased memory limit
-mkdir -p ~/.wp-cli
-echo "memory_limit = 512M" > ~/.wp-cli/config.yml
-
-# Alternative: Run commands with increased memory limit for a single command
-php -d memory_limit=512M $(which wp) core download
-
-# Alternative: Set a global PHP memory limit
-BREW_PREFIX=$(brew --prefix)
-echo "memory_limit = 512M" > $BREW_PREFIX/etc/php/*/conf.d/99-memory-limit.ini
-```
-
-You can verify which PHP configuration file is being used with:
-```bash
-php --ini | grep "Loaded Configuration File"
-```
-
-#### Permission Issues
-
-If you see "403 Forbidden" errors when accessing subdirectories:
-
-```bash
-# Fix WordPress directory permissions
-chmod o+x ~  # Allow others to execute in your home directory
-chmod 755 ~  # Alternative approach if the above doesn't work
-chmod 755 ~/Sites
-chmod -R 755 ~/Sites/wordpress
-
-# If you're still having issues, check the permissions of each directory in the path
-ls -la ~
-ls -la ~/Sites
-ls -la ~/Sites/wordpress
-```
-
-Also check the Apache error log for specific permission issues:
-
-```bash
-BREW_PREFIX=$(brew --prefix)
-cat $BREW_PREFIX/var/log/httpd/error_log
-```
-
-Possible errors and solutions:
-
-1. **"client denied by server configuration"**: Check your Apache configuration to ensure subdirectories are allowed.
-2. **"Permission denied"**: Fix file/directory permissions.
-3. **"failed to open dir: No such file or directory"**: Check if the path exists and is accessible.
-
-You can also add a `.htaccess` file to your Sites directory:
-
-```bash
-echo "Require all granted" > ~/Sites/.htaccess
-echo "Require all granted" > ~/Sites/wordpress/.htaccess
-```
-
-### Common Deployment Issues
-
-#### Git Push Errors
-
-```bash
-# If you get "Permission denied" errors
-# Verify SSH access to your server
-ssh username@your_domain.com
-
-# Test Git connection
-ssh -T username@your_domain.com
-```
-
-#### Hook Script Errors
-
-1. Check if the post-receive hook is executable:
-   ```bash
-   ssh username@your_domain.com "ls -la ~/git-repos/staging.git/hooks/post-receive"
-   ```
-2. Verify the hook script path:
-   ```bash
-   ssh username@your_domain.com "cat ~/git-repos/staging.git/hooks/post-receive"
-   ```
-
-#### URL Issues After Database Sync
-
-If site URLs are incorrect after database sync:
-
-```bash
-# For staging
-ssh username@your_domain.com "cd /path/to/staging/public_html && wp search-replace 'wordpress.local' 'staging.your_domain.com' --all-tables"
-
-# For production
-ssh username@your_domain.com "cd /path/to/production/public_html && wp search-replace 'staging.your_domain.com' 'your_domain.com' --all-tables"
-```
-
-### General WordPress Issues
-
-#### White Screen of Death
-
-1. Enable WordPress debugging:
-   Edit wp-config.php and add:
-   ```php
-   define('WP_DEBUG', true);
-   define('WP_DEBUG_LOG', true);
-   define('WP_DEBUG_DISPLAY', false);
-   ```
-2. Check the debug.log file:
-   ```bash
-   cat wp-content/debug.log
-   ```
-
-#### Plugin or Theme Conflicts
-
-1. Deactivate all plugins:
-   ```bash
-   wp plugin deactivate --all
-   ```
-2. Switch to a default theme:
-   ```bash
-   wp theme activate twentytwentythree
-   ```
-3. Reactivate plugins one by one to identify conflicts.
-
 ---
 
-This guide provides a comprehensive workflow for WordPress development from local setup to production deployment. Remember to adapt paths, URLs, and credentials to match your specific environment.
+This guide provides a comprehensive workflow for WordPress development from local setup to production deployment using WordPress 6.9's native Block Editor and Site Editor with the TwentyTwentyFive theme. Remember to adapt paths, URLs, and credentials to match your specific environment.
